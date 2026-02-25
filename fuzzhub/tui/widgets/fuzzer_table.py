@@ -33,10 +33,14 @@ class FuzzerTable(DataTable):
                 str(f.get("crashes", 0)),
             )
 
-    async def on_key(self, event: events.Key):
+    def on_key(self, event):
         if event.key == "enter":
             if self.cursor_row is not None:
                 row = self.get_row_at(self.cursor_row)
                 fuzzer_id = row[0]
 
-                self.app.show_fuzzer_detail(fuzzer_id)
+                from fuzzhub.tui.screens.fuzzer_detail import FuzzerDetailScreen
+
+                self.app.push_screen(
+                    FuzzerDetailScreen(fuzzer_id)
+                )

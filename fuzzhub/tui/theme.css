@@ -1,5 +1,14 @@
 /* File: fuzzhub/tui/theme.css */
 
+#main {
+    width: 1fr;
+    padding: 1 2;
+}
+
+#content {
+    padding: 1 2;
+}
+
 Screen {
     background: #0f111a;
 }
@@ -100,3 +109,9 @@ ConfirmQuitScreen {
 .sidebar-item {
     color: #d1d5db;
 }
+
+#detail-main {
+    width: 1fr;
+    padding: 1 2;
+}
+
