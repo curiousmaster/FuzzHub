@@ -1,0 +1,10 @@
+textual
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+pyyaml
+psutil
+alembic
+httpx
+websockets

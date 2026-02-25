@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""
+File: bin/fuzzhub
+
+FuzzHub TUI entrypoint.
+"""
+
+import os
+import sys
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
+sys.path.insert(0, PROJECT_ROOT)
+
+from fuzzhub.tui.app import FuzzHubApp
+
+if __name__ == "__main__":
+    FuzzHubApp().run()

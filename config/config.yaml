@@ -1,0 +1,14 @@
+database:
+  backend: sqlite
+  # Example PostgreSQL:
+  #   url: postgresql+psycopg2://user:pass@localhost/fuzzhub
+  # Example MySQL:
+  #   url: mysql+pymysql://user:pass@localhost/fuzzhub
+  url: sqlite:///runtime/fuzzhub.db
+
+daemon:
+  host: 127.0.0.1
+  port: 8000
+
+logging:
+  level: INFO
