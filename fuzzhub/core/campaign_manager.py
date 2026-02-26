@@ -22,6 +22,7 @@ class CampaignManager:
         self._fuzzers: Dict[str, object] = {}
         self._lock = threading.Lock()
         self._bus = event_bus
+        print("EVENT BUS (inside campaign manager init):", id(self._bus))
 
     # -----------------------------------------
     # Recovery Logic
@@ -43,11 +44,6 @@ class CampaignManager:
         db.close()
 
     def _create_placeholder(self, instance):
-        """
-        Placeholder object for reattached fuzzers.
-        We do not own the process but monitor it.
-        """
-
         class Placeholder:
             def __init__(self, db_instance):
                 self.id = db_instance.id
@@ -78,6 +74,7 @@ class CampaignManager:
     # -----------------------------------------
 
     def start_fuzzer(self, campaign_id: str, fuzzer_type: str, config: dict):
+
         fuzzer_cls = FuzzerRegistry.get(fuzzer_type)
         fuzzer = fuzzer_cls(campaign_id, config)
 
@@ -96,17 +93,19 @@ class CampaignManager:
         with self._lock:
             self._fuzzers[fuzzer.id] = fuzzer
 
-        self._persist_instance(fuzzer)
+        self._persist_instance(fuzzer, fuzzer_type)
 
-        # Emit event
-        self._bus.emit("fuzzer_started", {
-            "fuzzer_id": fuzzer.id,
-            "campaign_id": campaign_id,
+        self._bus.emit("fuzzer_update", {
+            "type": "fuzzer_update",
+            "fuzzer": fuzzer.status()
         })
 
         return fuzzer.id
 
     def stop_fuzzer(self, fuzzer_id: str):
+        print("EMITTING ON BUS:", id(self._bus))
+        print("STOP CALLED:", fuzzer_id)
+        print("KNOWN FUZZERS:", list(self._fuzzers.keys()))
         with self._lock:
             if fuzzer_id in self._fuzzers:
                 fuzzer = self._fuzzers[fuzzer_id]
@@ -117,17 +116,27 @@ class CampaignManager:
                     fuzzer._crash_thread.stop()
 
                 fuzzer.stop()
-
                 self._mark_stopped_in_db(fuzzer_id)
 
-                # Emit event
-                self._bus.emit("fuzzer_stopped", {
-                    "fuzzer_id": fuzzer_id,
+                # Update internal state before emit
+                status = {
+                    "id": fuzzer_id,
+                    "campaign_id": fuzzer.campaign_id,
+                    "state": "stopped",
+                    "pid": None,
+                }
+
+                print("EMIT: fuzzer_update(stop)")
+                self._bus.emit("fuzzer_update", {
+                    "fuzzer": status
                 })
+
 
                 del self._fuzzers[fuzzer_id]
 
+
     def restart_fuzzer(self, fuzzer_id: str):
+
         db = SessionLocal()
         instance = db.query(FuzzerInstance).filter_by(id=fuzzer_id).first()
 
@@ -140,13 +149,17 @@ class CampaignManager:
 
         db.close()
 
+        # Stop old instance
         self.stop_fuzzer(fuzzer_id)
 
-        return self.start_fuzzer(
+        # Start new instance
+        new_id = self.start_fuzzer(
             campaign_id=campaign_id,
             fuzzer_type=fuzzer_type,
             config={}
         )
+
+        return new_id
 
     def stop_all(self):
         with self._lock:
@@ -163,8 +176,8 @@ class CampaignManager:
             for fuzzer in self._fuzzers.values():
                 self._update_db_state(fuzzer)
 
-                # Emit update event
                 self._bus.emit("fuzzer_update", {
+                    "type": "fuzzer_update",
                     "fuzzer": fuzzer.status()
                 })
 
@@ -172,17 +185,20 @@ class CampaignManager:
     # Persistence
     # -----------------------------------------
 
-    def _persist_instance(self, fuzzer):
+    def _persist_instance(self, fuzzer, fuzzer_type: str):
+
         db = SessionLocal()
+
         instance = FuzzerInstance(
             id=fuzzer.id,
             campaign_id=fuzzer.campaign_id,
-            fuzzer_type=fuzzer.__class__.__name__,
+            fuzzer_type=fuzzer_type,
             pid=fuzzer.status()["pid"],
             state=fuzzer.status()["state"],
             started_at=datetime.utcnow(),
             last_heartbeat=datetime.utcnow(),
         )
+
         db.add(instance)
         db.commit()
         db.close()

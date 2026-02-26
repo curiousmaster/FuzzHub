@@ -19,6 +19,9 @@ class FuzzerDetailScreen(Screen):
 
     BINDINGS = [
         Binding("escape", "go_back", "Back"),
+        Binding("s", "stop_fuzzer", "Stop"),
+        Binding("r", "restart_fuzzer", "Restart"),
+        Binding("c", "refresh_crashes", "Refresh Crashes"),
         Binding("q", "app.confirm_quit", "Quit"),
     ]
 
@@ -27,11 +30,11 @@ class FuzzerDetailScreen(Screen):
         self.fuzzer_id = fuzzer_id
         self.api = APIClient()
 
-        # Widgets updated dynamically
         self.header_widget = Static("")
         self.status_widget = Static("")
         self.metrics_widget = Static("")
         self.crash_widget = Static("")
+        self.message_widget = Static("")
 
         self._ws_task = None
 
@@ -52,6 +55,7 @@ class FuzzerDetailScreen(Screen):
                     self.status_widget,
                     self.metrics_widget,
                     self.crash_widget,
+                    self.message_widget,
                     id="content"
                 )
 
@@ -89,12 +93,50 @@ class FuzzerDetailScreen(Screen):
     # --------------------------------------------------
     # Event Handling
     # --------------------------------------------------
-
     def _handle_event(self, event):
-        if event.get("type") == "fuzzer_update":
-            fuzzer = event.get("fuzzer", {})
-            if fuzzer.get("id") == self.fuzzer_id:
-                self._update_from_payload(fuzzer)
+
+        if event.get("type") != "fuzzer_update":
+            return
+
+        fuzzer = event.get("fuzzer")
+
+        if not fuzzer:
+            return
+
+        # If this fuzzer matches current screen
+        if fuzzer.get("id") == self.fuzzer_id:
+            self.update_display(fuzzer)
+
+    # --------------------------------------------------
+    # Backend Interaction
+    # --------------------------------------------------
+
+    def action_stop_fuzzer(self):
+        try:
+            self.api.stop_fuzzer(self.fuzzer_id)
+            self.message_widget.update("[yellow]Stopping fuzzer...[/yellow]")
+        except Exception:
+            self.message_widget.update("[red]Failed to stop fuzzer[/red]")
+
+
+    def action_restart_fuzzer(self):
+
+        try:
+            result = self.api.restart_fuzzer(self.fuzzer_id)
+            new_id = result.get("new_id")
+
+            if new_id:
+                self.fuzzer_id = new_id
+                self.message_widget.update("[green]Restarted successfully[/green]")
+            else:
+                self.message_widget.update("[red]Restart failed[/red]")
+
+        except Exception:
+            self.message_widget.update("[red]Failed to restart fuzzer[/red]")
+
+    def action_refresh_crashes(self):
+        self.refresh_data()
+        self.message_widget.update("[blue]Crash data refreshed[/blue]")
 
     # --------------------------------------------------
     # Data Refresh
@@ -106,10 +148,6 @@ class FuzzerDetailScreen(Screen):
             if f["id"] == self.fuzzer_id:
                 self._update_from_payload(f)
                 break
-
-    # --------------------------------------------------
-    # UI Update Logic
-    # --------------------------------------------------
 
     def _update_from_payload(self, data):
 
@@ -131,16 +169,12 @@ class FuzzerDetailScreen(Screen):
             "crashed": "red",
         }.get(state, "white")
 
-        # ---------------- HEADER ----------------
-
         self.header_widget.update(
             f"[b]Fuzzer Detail[/b]\n"
             f"ID: {self.fuzzer_id}\n"
             f"Campaign: {campaign_id}\n"
             f"Type: {fuzzer_type}"
         )
-
-        # ---------------- STATUS ----------------
 
         self.status_widget.update(
             f"\n[b]Status[/b]\n"
@@ -150,16 +184,12 @@ class FuzzerDetailScreen(Screen):
             f"Last heartbeat: {last_heartbeat}"
         )
 
-        # ---------------- METRICS ----------------
-
         self.metrics_widget.update(
             f"\n[b]Metrics[/b]\n"
             f"Exec/sec: {exec_sec}\n"
             f"Corpus size: {corpus}\n"
             f"Coverage: {coverage}%"
         )
-
-        # ---------------- CRASHES ----------------
 
         self.crash_widget.update(
             f"\n[b]Crashes[/b]\n"

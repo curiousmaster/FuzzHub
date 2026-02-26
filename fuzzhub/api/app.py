@@ -20,6 +20,7 @@ class StartFuzzerRequest(BaseModel):
 
 
 def create_api(campaign_manager, event_bus):
+    print("EVENT BUS (api):", id(event_bus))
 
     app = FastAPI(title="FuzzHub API")
 
@@ -29,13 +30,18 @@ def create_api(campaign_manager, event_bus):
 
     active_connections: List[WebSocket] = []
 
-    async def broadcast(event: dict):
-        """Send JSON event to all connected WebSocket clients."""
+    # File: fuzzhub/api/app.py
+
+    loop = asyncio.get_event_loop()
+
+
+    async def broadcast(data: dict):
+        print("BROADCAST TO:", len(active_connections))
         dead_connections = []
 
         for connection in active_connections:
             try:
-                await connection.send_text(json.dumps(event))
+                await connection.send_text(json.dumps(data))
             except Exception:
                 dead_connections.append(connection)
 
@@ -43,21 +49,20 @@ def create_api(campaign_manager, event_bus):
             if conn in active_connections:
                 active_connections.remove(conn)
 
-    # -----------------------------------------
-    # EventBus → WebSocket Bridge
-    # -----------------------------------------
+    def handle_event(event):
 
-    def handle_event(event: dict):
-        """
-        Called from EventBus (sync context).
-        Safely schedule async broadcast in uvicorn loop.
-        """
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(broadcast(event))
-        except RuntimeError:
-            # No running loop (startup/shutdown edge case)
-            pass
+        loop = getattr(app.state, "loop", None)
+
+        if not loop:
+            print("NO LOOP AVAILABLE YET")
+            return
+
+        print("SCHEDULING ON LOOP:", id(loop))
+
+        loop.call_soon_threadsafe(
+            asyncio.create_task,
+            broadcast(event)
+        )
 
     # Subscribe to all events
     event_bus.subscribe("*", handle_event)
@@ -134,26 +139,48 @@ def create_api(campaign_manager, event_bus):
 
     @app.post("/fuzzers/{fuzzer_id}/restart")
     def restart_fuzzer(fuzzer_id: str):
+
         new_id = campaign_manager.restart_fuzzer(fuzzer_id)
-        return {"status": "restarted", "new_id": new_id}
+
+        if not new_id:
+            return {"error": "restart failed"}
+
+        return {
+            "status": "restarted",
+            "new_id": new_id
+        }
 
     # -----------------------------------------
     # WebSocket Endpoint
     # -----------------------------------------
-
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
+
+        if not hasattr(app.state, "loop"):
+            app.state.loop = asyncio.get_running_loop()
+            print("CAPTURED LOOP:", id(app.state.loop))
+
         await websocket.accept()
         active_connections.append(websocket)
 
         try:
             while True:
-                await websocket.receive_text()
-        except WebSocketDisconnect:
-            if websocket in active_connections:
-                active_connections.remove(websocket)
+                await asyncio.sleep(3600)
+
+        except asyncio.CancelledError:
+            # Expected during shutdown
+            pass
+
         except Exception:
+            pass
+
+        finally:
             if websocket in active_connections:
                 active_connections.remove(websocket)
+
+    @app.on_event("startup")
+    async def startup_event():
+        app.state.loop = asyncio.get_running_loop()
+        print("CAPTURED LOOP:", id(app.state.loop))
 
     return app

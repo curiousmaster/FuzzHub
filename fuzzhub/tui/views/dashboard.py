@@ -77,8 +77,6 @@ class DashboardScreen(Widget):
         event_type = event.get("type")
 
         if event_type in (
-            "fuzzer_started",
-            "fuzzer_stopped",
             "fuzzer_update",
         ):
             self.refresh_data()
