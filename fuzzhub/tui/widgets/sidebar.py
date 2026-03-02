@@ -21,5 +21,5 @@ class Sidebar(Widget):
             yield Static("[D] Dashboard", classes="sidebar-item")
 
     def action_dashboard(self):
-        from fuzzhub.tui.views.dashboard import DashboardScreen
+        from fuzzhub.tui.screens.dashboard import DashboardScreen
         self.app.push_screen(DashboardScreen())

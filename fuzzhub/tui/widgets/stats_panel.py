@@ -9,7 +9,7 @@ class StatsPanel(Static):
 
     def update_stats(self, fuzzers):
         total = len(fuzzers)
-        total_crashes = sum(f["crash_count"] for f in fuzzers)
+        total_crashes = sum(f.get("crashes", 0) for f in fuzzers)
 
         content = (
             f"[bold cyan]Active Fuzzers:[/bold cyan] {total}\n"

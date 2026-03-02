@@ -1,5 +1,6 @@
 runtime
 errors.txt
+*.log
 x
 */__pycache__/*
 *.pyc

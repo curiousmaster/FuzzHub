@@ -6,7 +6,7 @@ import asyncio
 import json
 from typing import List
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
 
 from fuzzhub.database.session import SessionLocal
@@ -30,10 +30,7 @@ def create_api(campaign_manager, event_bus):
 
     active_connections: List[WebSocket] = []
 
-    # File: fuzzhub/api/app.py
-
     loop = asyncio.get_event_loop()
-
 
     async def broadcast(data: dict):
         print("BROADCAST TO:", len(active_connections))
@@ -112,6 +109,44 @@ def create_api(campaign_manager, event_bus):
         return data
 
     # -----------------------------------------
+    # Get Single Fuzzer (NEW)
+    # -----------------------------------------
+
+    @app.get("/fuzzers/{fuzzer_id}")
+    def get_fuzzer(fuzzer_id: str):
+        db = SessionLocal()
+
+        f = campaign_manager._fuzzers.get(fuzzer_id)
+        if not f:
+            db.close()
+            raise HTTPException(status_code=404, detail="Fuzzer not found")
+
+        status = f.status()
+
+        latest_metric = (
+            db.query(MetricSnapshot)
+            .filter_by(fuzzer_instance_id=status["id"])
+            .order_by(MetricSnapshot.timestamp.desc())
+            .first()
+        )
+
+        crash_count = (
+            db.query(Crash)
+            .filter_by(fuzzer_instance_id=status["id"])
+            .count()
+        )
+
+        db.close()
+
+        return {
+            **status,
+            "exec_per_sec": latest_metric.exec_per_sec if latest_metric else None,
+            "corpus_size": latest_metric.corpus_size if latest_metric else None,
+            "coverage": latest_metric.coverage if latest_metric else None,
+            "crash_count": crash_count,
+        }
+
+    # -----------------------------------------
     # Start Fuzzer
     # -----------------------------------------
 
@@ -153,6 +188,7 @@ def create_api(campaign_manager, event_bus):
     # -----------------------------------------
     # WebSocket Endpoint
     # -----------------------------------------
+
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
 
@@ -168,7 +204,6 @@ def create_api(campaign_manager, event_bus):
                 await asyncio.sleep(3600)
 
         except asyncio.CancelledError:
-            # Expected during shutdown
             pass
 
         except Exception:

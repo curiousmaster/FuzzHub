@@ -3,26 +3,17 @@ File: fuzzhub/tui/screens/fuzzer_detail.py
 """
 
 import asyncio
-import json
-import websockets
-
 from textual.screen import Screen
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, Container
 from textual.widgets import Static, Footer
 
-from fuzzhub.tui.widgets.sidebar import Sidebar
 from fuzzhub.tui.api_client import APIClient
 
 
 class FuzzerDetailScreen(Screen):
 
     BINDINGS = [
-        Binding("escape", "go_back", "Back"),
-        Binding("s", "stop_fuzzer", "Stop"),
-        Binding("r", "restart_fuzzer", "Restart"),
-        Binding("c", "refresh_crashes", "Refresh Crashes"),
-        Binding("q", "app.confirm_quit", "Quit"),
+        Binding("escape", "back", "Back"),
     ]
 
     def __init__(self, fuzzer_id: str):
@@ -30,175 +21,31 @@ class FuzzerDetailScreen(Screen):
         self.fuzzer_id = fuzzer_id
         self.api = APIClient()
 
-        self.header_widget = Static("")
-        self.status_widget = Static("")
-        self.metrics_widget = Static("")
-        self.crash_widget = Static("")
-        self.message_widget = Static("")
-
-        self._ws_task = None
-
-    # --------------------------------------------------
-    # Layout
-    # --------------------------------------------------
-
     def compose(self):
+        yield Static("Loading...", id="detail_text")
+        yield Footer()
 
-        with Horizontal():
-
-            yield Sidebar(id="sidebar")
-
-            with Vertical(id="main"):
-
-                yield Container(
-                    self.header_widget,
-                    self.status_widget,
-                    self.metrics_widget,
-                    self.crash_widget,
-                    self.message_widget,
-                    id="content"
-                )
-
-                yield Footer()
-
-    # --------------------------------------------------
-    # Lifecycle
-    # --------------------------------------------------
-
-    def on_mount(self):
-        self.refresh_data()
-        self._ws_task = asyncio.create_task(self._listen_ws())
-
-    def on_unmount(self):
-        if self._ws_task:
-            self._ws_task.cancel()
-
-    # --------------------------------------------------
-    # WebSocket Listener
-    # --------------------------------------------------
-
-    async def _listen_ws(self):
-        uri = "ws://127.0.0.1:8000/ws"
-
-        while True:
-            try:
-                async with websockets.connect(uri) as websocket:
-                    while True:
-                        message = await websocket.recv()
-                        event = json.loads(message)
-                        self._handle_event(event)
-            except Exception:
-                await asyncio.sleep(2)
-
-    # --------------------------------------------------
-    # Event Handling
-    # --------------------------------------------------
-    def _handle_event(self, event):
-
-        if event.get("type") != "fuzzer_update":
-            return
-
-        fuzzer = event.get("fuzzer")
+    async def on_mount(self):
+        fuzzer = await asyncio.to_thread(
+            self.api.get_fuzzer,
+            self.fuzzer_id
+        )
 
         if not fuzzer:
+            self.app.pop_screen()
             return
 
-        # If this fuzzer matches current screen
-        if fuzzer.get("id") == self.fuzzer_id:
-            self.update_display(fuzzer)
+        text = f"""
+Fuzzer Details
+==============
 
-    # --------------------------------------------------
-    # Backend Interaction
-    # --------------------------------------------------
+ID: {fuzzer.get("id")}
+State: {fuzzer.get("state")}
+Executions: {fuzzer.get("executions")}
+Crashes: {fuzzer.get("crashes")}
+"""
 
-    def action_stop_fuzzer(self):
-        try:
-            self.api.stop_fuzzer(self.fuzzer_id)
-            self.message_widget.update("[yellow]Stopping fuzzer...[/yellow]")
-        except Exception:
-            self.message_widget.update("[red]Failed to stop fuzzer[/red]")
+        self.query_one("#detail_text", Static).update(text)
 
-
-    def action_restart_fuzzer(self):
-
-        try:
-            result = self.api.restart_fuzzer(self.fuzzer_id)
-            new_id = result.get("new_id")
-
-            if new_id:
-                self.fuzzer_id = new_id
-                self.message_widget.update("[green]Restarted successfully[/green]")
-            else:
-                self.message_widget.update("[red]Restart failed[/red]")
-
-        except Exception:
-            self.message_widget.update("[red]Failed to restart fuzzer[/red]")
-
-    def action_refresh_crashes(self):
-        self.refresh_data()
-        self.message_widget.update("[blue]Crash data refreshed[/blue]")
-
-    # --------------------------------------------------
-    # Data Refresh
-    # --------------------------------------------------
-
-    def refresh_data(self):
-        fuzzers = self.api.list_fuzzers()
-        for f in fuzzers:
-            if f["id"] == self.fuzzer_id:
-                self._update_from_payload(f)
-                break
-
-    def _update_from_payload(self, data):
-
-        state = data.get("state", "unknown")
-        pid = data.get("pid", "n/a")
-        campaign_id = data.get("campaign_id", "n/a")
-        fuzzer_type = data.get("fuzzer_type", "n/a")
-        started_at = data.get("started_at", "n/a")
-        last_heartbeat = data.get("last_heartbeat", "n/a")
-
-        exec_sec = data.get("exec_per_sec", 0)
-        corpus = data.get("corpus_size", 0)
-        coverage = data.get("coverage", 0)
-        crashes = data.get("crash_count", 0)
-
-        state_color = {
-            "running": "green",
-            "stopped": "yellow",
-            "crashed": "red",
-        }.get(state, "white")
-
-        self.header_widget.update(
-            f"[b]Fuzzer Detail[/b]\n"
-            f"ID: {self.fuzzer_id}\n"
-            f"Campaign: {campaign_id}\n"
-            f"Type: {fuzzer_type}"
-        )
-
-        self.status_widget.update(
-            f"\n[b]Status[/b]\n"
-            f"State: [{state_color}]{state}[/{state_color}]\n"
-            f"PID: {pid}\n"
-            f"Started: {started_at}\n"
-            f"Last heartbeat: {last_heartbeat}"
-        )
-
-        self.metrics_widget.update(
-            f"\n[b]Metrics[/b]\n"
-            f"Exec/sec: {exec_sec}\n"
-            f"Corpus size: {corpus}\n"
-            f"Coverage: {coverage}%"
-        )
-
-        self.crash_widget.update(
-            f"\n[b]Crashes[/b]\n"
-            f"Total crashes: {crashes}"
-        )
-
-    # --------------------------------------------------
-    # Navigation
-    # --------------------------------------------------
-
-    def action_go_back(self):
+    def action_back(self):
         self.app.pop_screen()

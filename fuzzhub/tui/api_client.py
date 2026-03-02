@@ -70,3 +70,13 @@ class APIClient:
         )
         r.raise_for_status()
         return r.json()
+
+    def get_fuzzer(self, fuzzer_id: str):
+        import requests
+
+        try:
+            response = requests.get(f"{self.base_url}/fuzzers/{fuzzer_id}")
+            response.raise_for_status()
+            return response.json()
+        except Exception:
+            return None

@@ -4,11 +4,8 @@ File: fuzzhub/tui/app.py
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, Container
-from textual.widgets import Footer
 
-from fuzzhub.tui.widgets.sidebar import Sidebar
-from fuzzhub.tui.views.dashboard import DashboardScreen
+from fuzzhub.tui.screens.dashboard import Dashboard
 from fuzzhub.tui.screens.confirm_quit import ConfirmQuitScreen
 
 
@@ -21,20 +18,7 @@ class FuzzHubApp(App):
     ]
 
     def compose(self) -> ComposeResult:
-        with Horizontal():
-            yield Sidebar(id="sidebar")
-
-            with Vertical(id="main"):
-                yield Container(id="content")
-                yield Footer()
-
-    def on_mount(self):
-        self.show_dashboard()
-
-    def show_dashboard(self):
-        content = self.query_one("#content")
-        content.remove_children()
-        content.mount(DashboardScreen())
+        yield Dashboard()
 
     def action_confirm_quit(self):
         self.push_screen(ConfirmQuitScreen())

@@ -1,39 +1,86 @@
 /* File: fuzzhub/tui/theme.css */
 
-#main {
-    width: 1fr;
-    padding: 1 2;
-}
-
-#content {
-    padding: 1 2;
-}
+/* --------------------------------------------------
+   Global Screen
+-------------------------------------------------- */
 
 Screen {
     background: #0f111a;
 }
 
-.sidebar {
+/* --------------------------------------------------
+   Dashboard Layout
+-------------------------------------------------- */
+
+#layout {
+    height: 100%;
+}
+
+#sidebar {
     width: 18;
+    height: 100%;
     background: #111827;
-    padding: 1;
     border-right: heavy #1f2937;
 }
 
-.main-area {
+#main {
+    width: 1fr;
+    height: 100%;
     padding: 1 2;
 }
 
-FuzzerTable {
-    border: round #1f2937;
+/* --------------------------------------------------
+   Sidebar
+-------------------------------------------------- */
+
+.sidebar-container {
+    padding: 1 1;
 }
+
+.sidebar-title {
+    text-style: bold;
+    color: #3b82f6;
+    margin-bottom: 1;
+}
+
+.sidebar-item {
+    color: #d1d5db;
+}
+
+/* --------------------------------------------------
+   Stats + Table
+-------------------------------------------------- */
 
 StatsPanel {
     border: round #1f2937;
     margin-bottom: 1;
 }
 
-/* --- Confirmation Modal --- */
+FuzzerTable {
+    border: round #1f2937;
+    height: 1fr;
+}
+
+/* --------------------------------------------------
+   Footer
+-------------------------------------------------- */
+
+Footer {
+    background: #111827;
+    color: #9ca3af;
+}
+
+/* --------------------------------------------------
+   Fuzzer Detail Screen
+-------------------------------------------------- */
+
+#detail_text {
+    padding: 1 2;
+}
+
+/* --------------------------------------------------
+   Confirmation Modal
+-------------------------------------------------- */
 
 ConfirmQuitScreen {
     layout: grid;
@@ -58,8 +105,6 @@ ConfirmQuitScreen {
     margin-bottom: 1;
 }
 
-/* --- Buttons --- */
-
 .confirm-buttons {
     width: 100%;
     margin-top: 1;
@@ -82,36 +127,7 @@ ConfirmQuitScreen {
     color: #f59e0b;
 }
 
-/* Selected state */
 .confirm-btn.selected {
     background: #1f2937;
     border: heavy #3b82f6;
 }
-
-/* --- Sidebar --- */
-
-#sidebar {
-    width: 18;
-    background: #111827;
-    border-right: heavy #1f2937;
-}
-
-.sidebar-container {
-    padding: 1 1;
-}
-
-.sidebar-title {
-    text-style: bold;
-    color: #3b82f6;
-    margin-bottom: 1;
-}
-
-.sidebar-item {
-    color: #d1d5db;
-}
-
-#detail-main {
-    width: 1fr;
-    padding: 1 2;
-}
-
