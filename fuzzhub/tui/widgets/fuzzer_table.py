@@ -49,16 +49,11 @@ class FuzzerTable(DataTable):
             )
 
     def action_open_selected(self):
-        logger.debug("ENTER binding fired")
-
         if self.cursor_row is None:
-            logger.debug("No cursor row selected")
             return
 
         row = self.get_row_at(self.cursor_row)
         fuzzer_id = row[0]
-
-        logger.debug(f"Opening fuzzer {fuzzer_id}")
 
         from fuzzhub.tui.screens.fuzzer_detail import FuzzerDetailScreen
         self.app.push_screen(FuzzerDetailScreen(fuzzer_id))

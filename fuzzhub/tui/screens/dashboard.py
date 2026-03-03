@@ -3,7 +3,7 @@ File: fuzzhub/tui/screens/dashboard.py
 """
 
 import asyncio
-from textual.widget import Widget
+from textual.screen import Screen
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer
 
@@ -13,7 +13,7 @@ from fuzzhub.tui.widgets.fuzzer_table import FuzzerTable
 from fuzzhub.tui.api_client import APIClient
 
 
-class Dashboard(Widget):
+class DashboardScreen(Screen):
 
     def __init__(self):
         super().__init__()
@@ -22,29 +22,21 @@ class Dashboard(Widget):
         self.table = FuzzerTable()
 
     def compose(self):
-        with Horizontal(id="layout"):
+        with Horizontal():
             yield Sidebar(id="sidebar")
 
             with Vertical(id="main"):
                 yield self.stats
                 yield self.table
 
-    def on_mount(self):
-        # Load data synchronously via worker
-        self.run_worker(self._load_data, thread=True)
+        yield Footer()
 
-        # Focus table AFTER mount
-        self.call_later(lambda: self.app.set_focus(self.table))
+    async def on_mount(self):
+        fuzzers = await asyncio.to_thread(self.api.list_fuzzers)
+        self.table.update_data(fuzzers)
+        self.stats.update_stats(fuzzers)
 
-    def _load_data(self):
-        fuzzers = self.api.list_fuzzers()
+        self.set_focus(self.table)
 
-        def update():
-            self.table.update_data(fuzzers)
-            self.stats.update_stats(fuzzers)
-
-            if self.table.row_count > 0:
-                self.table.cursor_coordinate = (0, 0)
-
-        self.app.call_from_thread(update)
-
+        if self.table.row_count > 0:
+            self.table.cursor_coordinate = (0, 0)

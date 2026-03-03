@@ -81,19 +81,40 @@ def create_api(campaign_manager, event_bus):
         db = SessionLocal()
         data = []
 
-        for f in campaign_manager._fuzzers.values():
-            status = f.status()
+        # Collect all known fuzzer IDs from DB
+        known_ids = {
+            row[0]
+            for row in db.query(MetricSnapshot.fuzzer_instance_id).distinct()
+        }
+
+        # Include currently running fuzzers
+        for fuzzer_id, f in campaign_manager._fuzzers.items():
+            known_ids.add(fuzzer_id)
+
+        for fuzzer_id in known_ids:
+
+            f = campaign_manager._fuzzers.get(fuzzer_id)
+
+            if f:
+                status = f.status()
+            else:
+                status = {
+                    "id": fuzzer_id,
+                    "state": "stopped",
+                    "pid": None,
+                    "uptime_seconds": None,
+                }
 
             latest_metric = (
                 db.query(MetricSnapshot)
-                .filter_by(fuzzer_instance_id=status["id"])
+                .filter_by(fuzzer_instance_id=fuzzer_id)
                 .order_by(MetricSnapshot.timestamp.desc())
                 .first()
             )
 
             crash_count = (
                 db.query(Crash)
-                .filter_by(fuzzer_instance_id=status["id"])
+                .filter_by(fuzzer_instance_id=fuzzer_id)
                 .count()
             )
 
@@ -116,23 +137,41 @@ def create_api(campaign_manager, event_bus):
     def get_fuzzer(fuzzer_id: str):
         db = SessionLocal()
 
+        # Try running fuzzers first
         f = campaign_manager._fuzzers.get(fuzzer_id)
-        if not f:
-            db.close()
-            raise HTTPException(status_code=404, detail="Fuzzer not found")
 
-        status = f.status()
+        if f:
+            status = f.status()
+        else:
+            # Fallback: look up latest metrics to reconstruct stopped fuzzer
+            latest_metric = (
+                db.query(MetricSnapshot)
+                .filter_by(fuzzer_instance_id=fuzzer_id)
+                .order_by(MetricSnapshot.timestamp.desc())
+                .first()
+            )
+
+            if not latest_metric:
+                db.close()
+                raise HTTPException(status_code=404, detail="Fuzzer not found")
+
+            status = {
+                "id": fuzzer_id,
+                "state": "stopped",
+                "pid": None,
+                "uptime_seconds": None,
+            }
 
         latest_metric = (
             db.query(MetricSnapshot)
-            .filter_by(fuzzer_instance_id=status["id"])
+            .filter_by(fuzzer_instance_id=fuzzer_id)
             .order_by(MetricSnapshot.timestamp.desc())
             .first()
         )
 
         crash_count = (
             db.query(Crash)
-            .filter_by(fuzzer_instance_id=status["id"])
+            .filter_by(fuzzer_instance_id=fuzzer_id)
             .count()
         )
 
